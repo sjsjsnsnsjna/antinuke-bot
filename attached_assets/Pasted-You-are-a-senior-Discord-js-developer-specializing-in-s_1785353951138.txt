@@ -1,0 +1,209 @@
+You are a senior Discord.js developer specializing in server-security / anti-nuke bots. Build a COMPLETE, PRODUCTION-READY, ROBUST anti-nuke security bot according to the spec below. Zero tolerance for unhandled errors or silent crashes — this bot exists specifically to catch malicious activity (channel deletion, mass bans, role wipes, etc.), so it must never itself crash or fail silently. Build everything in ONE PASS. Do not ask me clarifying questions — this spec is final. Only report a short summary when the whole job is done.
+
+=== GOLDEN RULE: BE MAXIMALLY, ABSOLUTELY, EXTREMELY EFFICIENT WITH MY REPLIT AGENT USAGE/CREDITS ===
+This is THE single most important constraint in this entire prompt — more important than polish, more important than anything else. Every checkpoint/step/tool-call you use costs me real money and real credits. Treat my credit balance as sacred and act like the cheapest possible path to a correct, complete result is the ONLY acceptable path.
+- Before writing a single file, plan the ENTIRE file structure and content mentally, end to end. Then execute that plan in as few tool calls as physically possible — batch multiple files into as few write operations as the tooling allows, don't split one file's content across multiple calls.
+- NEVER run, start, restart, or execute the bot to "see if it works." No live test runs, no iterative "let me check this" loops, no exploratory shell commands out of curiosity. At most ONE final lightweight static check (syntax check / dependency install check) at the very end — nothing more, ever.
+- NEVER pause to ask me questions, never request confirmation, never present multiple options for me to choose from — every decision in this spec is already final; pick the sensible default yourself instantly and keep moving.
+- NEVER rewrite, regenerate, or "improve" a file you already completed unless it has an actual bug you must fix. No cosmetic passes, no "let me also polish this a bit more," no second-guessing your own already-correct work.
+- NEVER re-read files you just wrote to "double check" them — you already know what you wrote.
+- Batch ALL git operations (init, add, commit, push) into the minimum possible number of steps — ideally one shell sequence, not separate steps per file.
+- If you find yourself about to take a step that isn't strictly necessary to reach a complete, correct, working result, skip it.
+- The entire build — every file, git setup, and the GitHub push — should be completed in the fewest possible total steps from start to finish. Fewer steps is always better than more steps, as long as the end result is still complete and correct.
+
+=== CRITICAL: DO NOT RUN THE BOT ===
+Do NOT start, run, host, or keep the bot alive on Replit. Do NOT use Replit's "Run" workflow, and do NOT set up "Always On" for it. Your job is ONLY to:
+1. Write all the bot's source files correctly.
+2. Initialize git, commit everything, and push the repo to my GitHub account (see GitHub section below).
+I will deploy and run the bot myself on Railway after the repo is pushed. Do not install a Discord token in Replit's own runtime and do not test-run the bot with a live token on Replit.
+
+=== OVERALL QUALITY BAR (NON-NEGOTIABLE — THE MOST IMPORTANT SECTION IN THIS ENTIRE PROMPT) ===
+This bot must be objectively the best possible version of a Discord security bot — not "good enough", not "decent", the best:
+- MOST RELIABLE / ZERO ERRORS: no crashes, no silent failures, no unhandled exceptions, ever — under any input, any permission state, any Discord API hiccup. See ZERO-ERROR REQUIREMENT below and treat it as absolute law, not a suggestion.
+- EASIEST TO USE: a completely non-technical server owner must be able to understand and fully operate this bot using only /yardim — no reading code, no guessing syntax, no confusion.
+- MOST POWERFUL: cover every detection category listed in this prompt with no gaps — channel/role wipes, ban/kick spam, webhook abuse, unauthorized bot adds, dangerous permission grants, raids, AND recover from them (backup/restore) AND let admins lock everything down instantly (panic mode). Nothing in this spec is optional or "nice to have" — implement all of it, fully, not a stripped-down subset.
+- MOST BEAUTIFUL / POLISHED: every single message (alerts, command replies, help, everything) uses Components V2 with a clean, consistent, professional visual structure — never a generic-looking bot response, never a flat wall of text.
+- MOST TRUSTWORTHY: correct, conservative behavior when uncertain (e.g. can't identify an actor, insufficient permissions) — log clearly and do nothing destructive rather than guess and risk punishing the wrong person.
+- Before finishing, mentally review the whole bot against these five bars — reliability, ease of use, power/completeness, polish, trustworthiness — and fix anything that falls short before reporting back to me. This is the actual bar for "done", not just "it compiles".
+
+=== ZERO-ERROR REQUIREMENT (CRITICAL — READ TWICE) ===
+This bot's entire purpose is reliability during an actual attack, so:
+- Wrap EVERY event handler and EVERY Discord API call in try/catch. A single failed audit-log fetch or a single missing-permission error must NEVER crash the process or stop the bot from continuing to monitor.
+- Add global handlers for `process.on('unhandledRejection', ...)` and `process.on('uncaughtException', ...)` that log the error (to console and, if configured, to the log channel) and keep the process alive — never let one bad event kill the whole bot.
+- Handle Discord API rate limits gracefully (discord.js handles most of this internally, but any manual fetch loops — e.g. polling audit logs — must include backoff and must never spam requests).
+- Handle the audit-log-fetch delay/eventual-consistency issue: Discord's audit log entry for an action (e.g. channel delete) sometimes takes a moment to appear. Add a short retry (e.g. up to 2-3 attempts with a small delay) when matching an event to its audit log entry, so the responsible user is not mis-identified or missed.
+- Every permission check must confirm the bot actually HAS the required permission before attempting an action (e.g. before banning someone, check the bot's own role position and permissions) and fail gracefully with a log message if it doesn't, instead of throwing.
+
+=== BOT LANGUAGE ===
+All user-facing output (log embeds, DM warnings, command replies, help text) MUST be in TURKISH. Code (variable/function names, comments) stays in English. Slash command names/descriptions should be Turkish where Discord's API allows it.
+
+=== TECH STACK ===
+- Node.js + discord.js v14 (latest stable), with the GuildAuditLogManager / audit log fetching used to identify who performed a destructive action.
+- Both slash commands (/) AND classic prefix commands (B!) work side by side for admin/config commands, sharing the same handler logic.
+- Discord Components V2 (ContainerBuilder, SectionBuilder, TextDisplayBuilder, SeparatorBuilder, ActionRowBuilder) must be used for EVERY bot message — log alerts, command responses, everything. No plain EmbedBuilder-only messages, no flat text dumps.
+- A lightweight persistent store (better-sqlite3 or a JSON file with atomic writes) for: whitelist (trusted admin IDs/roles that bypass all checks), punishment history, per-user action counters (for rate-based detection), and guild config (log channel ID, punishment mode, thresholds).
+- dotenv for environment variables (.env never committed, must be in .gitignore).
+
+=== CORE ANTI-NUKE DETECTION (each is independently toggleable in config) ===
+Monitor these destructive actions via Discord gateway events + audit log correlation, and treat any of them performed by a non-whitelisted member as a threat:
+1. Channel delete (channelDelete event) — mass or single
+2. Channel create spam (channelCreate) — e.g. more than N channels created within a short time window
+3. Role delete (roleDelete)
+4. Role create spam / a role suddenly granted dangerous permissions (Administrator, Manage Server, Manage Roles, Ban Members, Kick Members) to an unexpected member (guildMemberUpdate detecting new dangerous roles)
+5. Member ban spam (guildBanAdd) — more than N bans within a short time window by the same actor
+6. Member kick spam (guildMemberRemove correlated with an audit log kick entry)
+7. Webhook creation (webhooksUpdate) by a non-whitelisted member — webhooks are a common nuke vector
+8. Bot addition to the server (guildMemberAdd where the new member is a bot) by a non-whitelisted inviter — flag unauthorized bot adds
+9. Server settings changes (guildUpdate) — e.g. vanity URL change, verification level lowered
+
+For each category, track a rolling count per-actor (e.g. "3 channel deletions within 10 seconds") using an in-memory + persisted counter, with a configurable threshold and time window per action type.
+
+=== AUTOMATIC RESPONSE (when a threat is detected) ===
+- Immediately strip ALL roles from the offending member (if the bot's role is high enough in the hierarchy) to neutralize further damage, THEN quarantine them with a configurable "Quarantined" role (create it automatically if it doesn't exist, with all channel permissions denied), THEN optionally ban them if configured to do so for that severity level.
+- If the offender is the server owner or has a role higher than the bot, the bot cannot act on them directly — in that case just send the loudest possible alert to the log channel and, if configured, DM the whitelisted admins, rather than attempting an action that will fail.
+- Attempt to restore what was destroyed where feasible: for a deleted channel, recreate it with the same name, type, and position if a recent backup snapshot exists (see backup section); for deleted roles, recreate with the same name/color/permissions if backed up.
+- Send a detailed Components V2 alert to the configured log channel for every single detected threat AND every action the bot took in response, in Turkish, using the appropriate emoji category (danger/red/uyari for threats, tik/tik1 for successful containment).
+
+=== BACKUP / SNAPSHOT SYSTEM ===
+- Periodically (e.g. every N minutes, configurable) snapshot the guild's channel list (name, type, position, parent category, permission overwrites) and role list (name, color, permissions, position) to the local database.
+- Provide a manual /yedek-al (take backup now) admin command and a /yedek-geri-yukle (restore from backup) admin command, both requiring confirmation via a Components V2 "Onayla/İptal" button before executing anything destructive or bulk-creating.
+
+=== WHITELIST & CONFIG COMMANDS (admin/owner only, both / and B!) ===
+- /whitelist-ekle <user_or_role>, /whitelist-cikar <user_or_role>, /whitelist-listele — manage who bypasses all anti-nuke checks (should default to including the server owner and the bot itself automatically).
+- /guvenlik-ayarlar — show current thresholds/toggles via Components V2, with buttons/select menus to adjust them per action type (channel delete threshold, ban spam threshold, punishment severity, etc.).
+- /log-kanal-ayarla <channel> — set the log channel (stored, not hardcoded).
+- /karantina-kaldir <user> — manually release a quarantined user.
+- /raid-modu-ac, /raid-modu-kapat — manually force raid-lockdown state on/off.
+- /panik, /panik-kaldir — manual server-wide lockdown and restore (see PANIC / LOCKDOWN MODE section), both requiring the Components V2 confirmation step.
+- /guvenlik-durum — show the security dashboard (see STATISTICS / DASHBOARD COMMAND section).
+- /yardim — the polished, permission-aware help command (see its own dedicated section below).
+- All of the above must check real Discord permissions (Administrator or a configured security-admin role) inside the shared handler itself, not just via slash command registration, so the B! prefix path can't be used to bypass permission checks.
+
+=== RAID PROTECTION (mass-join detection) ===
+- Track join timestamps (guildMemberAdd) in a rolling window; if more than a configurable N members join within a configurable short window (classic raid pattern), automatically trigger a raid response: temporarily set the server's verification level higher (e.g. to "High"), and optionally auto-kick or quarantine accounts newer than a configurable account-age threshold (very new Discord accounts are a strong raid signal).
+- Send an immediate Components V2 alert to the log channel describing the raid pattern detected and every automatic action taken, in Turkish.
+- Add a /raid-modu-ac and /raid-modu-kapat admin command to manually force this lockdown state on/off regardless of detection, for when an admin sees trouble starting before the auto-threshold trips.
+
+=== PANIC / LOCKDOWN MODE ===
+- Add a single /panik (panic) admin command that, when triggered, immediately: denies @everyone "Send Messages" and "Create Invite" permissions on all text channels (storing the previous state so it can be reverted), revokes all active invite links, and posts a loud Components V2 alert to the log channel.
+- Add a matching /panik-kaldir command that restores the exact previous permission state that was saved before lockdown (never guesses — must restore from the saved snapshot, not just reset to defaults).
+- Both must show a Components V2 confirmation button before executing, since this affects the whole server.
+
+=== ADMIN DM ALERTS ===
+- For the highest-severity detections only (e.g. attempted mass channel/role deletion, an admin-permission role being granted to an unexpected account, raid detection) — in addition to the log channel message — DM every whitelisted admin a short Components V2 alert. Wrap every DM send in try/catch and silently skip users who have DMs disabled (a failed DM must never crash or block the rest of the response pipeline).
+
+=== PERIODIC PERMISSION AUDIT ===
+- On a configurable interval (e.g. every 30-60 minutes) and once on startup, scan all roles and all members for anyone (outside the whitelist) holding Administrator, Manage Server, Manage Roles, Manage Channels, Ban Members, or Kick Members permissions, and post a Components V2 summary to the log channel so admins can spot a privilege escalation that slipped past real-time detection (e.g. one that happened while the bot was offline/restarting).
+
+=== SELF-ACTION EXCLUSION (avoid false positives) ===
+- The bot must never flag or act on its own actions (e.g. when the bot itself creates the quarantine role, deletes nothing, or restores a channel from backup, that must not be miscounted as a new threat). Track the bot's own recent actions in memory and explicitly exclude the bot's own user ID from every detection path, not just whitelist it like a normal user — self-actions should never even increment the threat counters.
+- Similarly, exclude actions performed by any account correctly using a whitelisted admin command through the bot (e.g. an admin using /yedek-geri-yukle to bulk-recreate channels should never trigger the bot's own channel-create-spam detector).
+
+=== STATISTICS / DASHBOARD COMMAND ===
+- Add a /guvenlik-durum (security status) command showing, via Components V2: current raid-mode/panic-mode state, number of threats detected in the last 24h/7d, last 5 punishment actions taken with timestamps and targets, and last backup snapshot time — so admins have a single place to check bot health after an incident.
+
+=== /yardim (HELP COMMAND) — THIS MUST BE THE MOST POLISHED PART OF THE WHOLE BOT ===
+This command is a non-technical admin's only way to understand and trust the bot, so it must be flawless:
+- Built entirely with Components V2: a clean container with clear section headers, separators between categories, and no wall of text anywhere.
+- Organize commands into clear Turkish categories with matching emojis: "🛡️ Güvenlik Ayarları" (whitelist, config, log channel), "🚨 Acil Durum" (panik, panik-kaldir, raid-modu), "💾 Yedekleme" (yedek-al, yedek-geri-yukle), "📊 Durum & Bilgi" (guvenlik-durum, whitelist-listele).
+- Paginated with Components V2 "◀ Geri" / "İleri ▶" buttons, one category per page, never all commands dumped in one message.
+- For EVERY command shown, include: what it does in one simple Turkish sentence a non-technical person understands (no jargon like "audit log" or "gateway event" — describe the effect, e.g. "Sunucuyu tamamen kilitler, kimse mesaj atamaz veya davet linki oluşturamaz"), the exact usage syntax for both / and B!, and a realistic example.
+- Only show admin-only commands to users who actually have permission to run them (check the invoking user's permissions before rendering that page/section) — a regular member typing /yardim should see a simpler, safe subset, not a wall of admin commands they can't use.
+- Add a short "Bu bot ne yapar?" (What does this bot do?) intro section at the very top of /yardim, in plain Turkish, explaining in 2-3 sentences that this bot automatically detects and stops server attacks (channel/role deletion, mass bans, raids) even if no admin is online — this is the first thing a confused/panicked server owner should see.
+- Handle the zero-commands-available edge case gracefully (e.g. a brand new member with no permissions) with a friendly Turkish message rather than an empty container.
+
+=== FILE STRUCTURE ===
+- index.js (entry point, client setup with all needed gateway intents including GuildModeration/AuditLog-relevant intents, global error handlers, command/event loader)
+- config/config.js (prefixes "/" and "B!", default thresholds/time-windows per action type, quarantine role name, reading LOG_CHANNEL_ID from environment as a fallback default)
+- config/emojis.js (central emoji config, using these exact server emoji IDs — grouped so the code can pick meaningfully by category: danger/alert → red/uyari, success/contained → tik/tik1, info → bilgi, vip-style badge → vip/nitro, transaction/log marker → siparis)
+
+Put this exact emoji object into that file:
+
+const emojis = {
+  animated: {
+    siparis: ['<a:siparis:1508829336801771531>', '<a:siparis:1508829345198768189>'],
+    red: ['<a:red:1508842246793854996>'],
+    robux: ['<a:robux:1508845983315001414>'],
+    sag: ['<a:sag:1508847124853428257>', '<a:sag:1508847126883471592>'],
+    sol: ['<a:sol:1508847260203618332>', '<a:sol:1508847262199976149>', '<a:sol:1508847311693025401>', '<a:sol:1508847313957945394>'],
+    uyari: ['<a:uyari:1508849769634861347>', '<a:uyari:1508849774126960650>'],
+    tik1: ['<a:tik1:1508849998954106950>'],
+    cryingManAnimated: ['<a:CryingManAnimated:1508850325258371133>'],
+    valerianYildiz: ['<a:Valerian_yildiz:1508850449514758174>'],
+    pc: ['<a:pc:1508850853568581753>'],
+    unlem: ['<a:unlem:1508860772032446487>', '<a:unlem:1509545200144613539>', '<a:unlem:1509545201985917019>', '<a:unlem:1509545203684348110>', '<a:unlem:1509545205404012644>', '<a:unlem:1509545206435811340>'],
+    discord: ['<a:discord:1509545365542539274>', '<a:discord:1509545366754955355>', '<a:discord:1509545368315101224>'],
+    bilgi: ['<a:bilgi:1509545549853098124>'],
+    nike: ['<a:nike:1509545708972281856>'],
+    etrollface2: ['<a:Etrollface2:1509545879202304122>'],
+    nitro: ['<a:nitro:1509546179308949567>', '<a:nitro:1509546182165270578>', '<a:nitro:1509546184136458382>', '<a:nitro:1509546187752079494>'],
+    vip: ['<a:VIP:1509546753043730523>'],
+    boom: ['<a:boom:1509547118749028444>', '<a:boom:1509547121538240612>', '<a:boom:1509547123035738246>'],
+    dv: ['<a:dv:1509547755650027550>'],
+    emote1: ['<a:emote1:1509547808636801155>'],
+    ayicik30: ['<a:1743_Ayicik30:1509547993429315807>'],
+    msmuyar: ['<a:msmuyar:1509548360665665606>'],
+    redBolt: ['<a:Red_Bolt:1509548391129022674>'],
+    prVaporeon: ['<a:pr_vaporeon:1509548607433478155>'],
+    uwuYouMadeMeBlush: ['<a:uwu_you_made_me_blush:1509548656171159654>'],
+    emoji288: ['<a:emoji_288:1509548723074764994>'],
+    lan: ['<a:lan:1509548765109944320>'],
+    discordggjihad: ['<a:discordggjihad:1509549527282090054>'],
+    kittysuprise: ['<a:kittysuprise:1509549604109287525>'],
+    dealwithit: ['<a:dealwithit:1509549750641492161>'],
+    hosgeldiniz: ['<a:HogeldinizGifDouTuraYrk4:1509550026484088975>']
+  },
+  static: {
+    bot: ['<:bot:1508829179037352056>'],
+    siparis: ['<:siparis:1508829339335135244>', '<:siparis:1508829341314711703>', '<:siparis:1508829343130845378>'],
+    tik: ['<:tik:1508842078770302986>', '<:tik:1508842079818616984>'],
+    red: ['<:red:1508842245166600305>', '<:red:1508842250027798620>', '<:red:1508842252846366788>', '<:red:1508842254452654231>'],
+    discord: ['<:Discord:1508845643865653330>', '<:Discord:1508845645262225543>', '<:Discord:1508845647145472040>', '<:Discord:1508845648340844616>', '<:Discord:1508845650152784022>'],
+    robux: ['<:robux:1508845980148170802>', '<:robux:1508845981712646204>'],
+    tac: ['<:Tac:1508846363088126026>', '<:Tac:1508846364564656321>', '<:Tac:1508846366124937236>', '<:Tac:1508846367961780294>'],
+    musteri: ['<:musteri:1508846617598623828>', '<:musteri:1508846618928222338>', '<:musteri:1508846620568060035>', '<:musteri:1508846622254174299>'],
+    destek: ['<:destek:1508846872201007286>', '<:destek:1508846873224675391>', '<:destek:1508846875556712498>', '<:destek:1508846878006050838>', '<:destek:1508846880287752332>', '<:destek:1508846881613021276>'],
+    sol: ['<:sol:1508847315685867552>', '<:sol:1508847317891944489>'],
+    sag: ['<:sag:1508847462608142356>'],
+    uyari: ['<:uyari:1508849768070385777>', '<:uyari:1508849771140349983>', '<:uyari:1508849772671402195>'],
+    single: ['<:Single:1508850057196212296>'],
+    nah: ['<:nah:1508850127480291338>'],
+    uyuzmusun: ['<:uyuzmusun:1508850172036387028>'],
+    emoji5: ['<:emoji_5:1508850214797049986>'],
+    developer: ['<:developer:1508850642968379554>'],
+    pc: ['<:pc:1508850845842673834>', '<:pc:1508850847172263997>', '<:pc:1508850848766365899>', '<:pc:1508850849974321273>', '<:pc:1508850851207184434>'],
+    sponsor: ['<:sponsor:1508860747474538496>', '<:sponsor:1508860748749864980>', '<:sponsor:1508860749995442176>']
+  }
+};
+
+module.exports = emojis;
+- commands/ (one file per command, shared execute function for both slash and prefix)
+- events/ (channelDelete.js, channelCreate.js, roleDelete.js, guildBanAdd.js, guildMemberRemove.js, guildMemberUpdate.js, webhooksUpdate.js, guildMemberAdd.js (also drives raid detection), guildUpdate.js, ready.js (also triggers the startup permission audit), interactionCreate.js, messageCreate.js)
+- jobs/ (the periodic permission-audit interval and the periodic backup-snapshot interval, both started once from index.js)
+- detection/ (the per-actor rolling counter / threshold logic, shared across event files)
+- backup/ (snapshot + restore logic)
+- database/ (sqlite or JSON-store connection and schema: whitelist, config, action counters, snapshots, punishment log)
+- utils/components.js (reusable Components V2 builders producing Turkish text: alertMessage(), successMessage(), errorMessage(), confirmationMessage())
+- .env.example (variable names only, no real values)
+- .gitignore (node_modules, .env, *.db, *.json data files if used for storage)
+- package.json ("start" = "node index.js", "engines" field with Node version)
+- Procfile (for Railway: "worker: node index.js")
+- README.md (in Turkish: setup, required bot permissions/intents to enable in the Discord Developer Portal, and Railway deploy steps)
+
+=== REQUIRED BOT PERMISSIONS (document clearly in README, in Turkish) ===
+The README must clearly list, in Turkish, that the bot needs: Administrator (or at minimum: Manage Roles, Manage Channels, Kick Members, Ban Members, View Audit Log, Manage Webhooks) and that its own role must be positioned ABOVE any role it needs to strip from an attacker — otherwise it cannot act. Also document that the "Server Members Intent" and "Message Content Intent" must be enabled in the Discord Developer Portal for the bot to function, since some of this detection logic depends on them.
+
+=== PUSH TO GITHUB (I will deploy on Railway myself — do not run anything here) ===
+- Read a secret named GITHUB_TOKEN from Replit's Secrets panel (I will have already added it).
+- Never print, log, or hardcode this token anywhere — only use it via process.env for git remote authentication, purely to push the repo.
+- Initialize git, commit all project files, and push to my existing GitHub repository using the token (format: https://<token>@github.com/<my-username>/<my-repo>.git). Ask me for my GitHub username and repo name if you don't already have them, then use exactly what I give you.
+- Never commit the real .env file — only .env.example should be committed.
+- Once the push succeeds, stop. Do not deploy, run, or keep anything alive afterward. Just give me the repo URL and the list of environment variable NAMES (not values) I need to set in Railway (e.g. DISCORD_TOKEN, CLIENT_ID, GUILD_ID, LOG_CHANNEL_ID, etc.).
+
+=== RAILWAY COMPATIBILITY ===
+- package.json must have complete, non-conflicting dependencies so `npm install` succeeds cleanly on Railway.
+- Any local database/JSON storage must live at a path compatible with Railway's volume/mount setup (e.g. ./data/) — mention this in the README, and warn that without a persistent volume, whitelist/config/backups will reset on every redeploy.
+- If required environment variables are missing (e.g. no DISCORD_TOKEN), the bot must exit early with a clear Turkish-logged error instead of crashing with a stack trace.
+
+=== FINAL CONSTRAINT ===
+Before finishing, mentally re-check every file against the OVERALL QUALITY BAR above (reliable, easy, polished) and against the ZERO-ERROR REQUIREMENT (try/catch everywhere, no silent crashes) — do this as a review pass over what you already wrote, not as extra live test runs. When finished, give me only a short summary: which files were created, whether the GitHub push succeeded, which environment variable names I need to enter in Railway, and which Discord Developer Portal intents/permissions I must enable before it will work.
