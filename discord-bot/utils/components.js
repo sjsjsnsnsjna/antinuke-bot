@@ -11,22 +11,16 @@ const {
   SeparatorSpacingSize,
 } = require('discord.js');
 
-const { e } = require('../config/emojis');
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Internals ─────────────────────────────────────────────────────────────────
 
 function _container(accentColor, ...components) {
   const c = new ContainerBuilder();
   if (accentColor != null) c.setAccentColor(accentColor);
   for (const comp of components) {
-    if (comp === null || comp === undefined) continue;
-    if (comp instanceof TextDisplayBuilder) {
-      c.addTextDisplayComponents(comp);
-    } else if (comp instanceof SeparatorBuilder) {
-      c.addSeparatorComponents(comp);
-    } else if (comp instanceof ActionRowBuilder) {
-      c.addActionRowComponents(comp);
-    }
+    if (comp == null) continue;
+    if (comp instanceof TextDisplayBuilder)  c.addTextDisplayComponents(comp);
+    else if (comp instanceof SeparatorBuilder)    c.addSeparatorComponents(comp);
+    else if (comp instanceof ActionRowBuilder)    c.addActionRowComponents(comp);
   }
   return c;
 }
@@ -43,107 +37,106 @@ function _flags() {
   return MessageFlags.IsComponentsV2;
 }
 
+function _ts() {
+  return Math.floor(Date.now() / 1000);
+}
+
+/** Wrap each line of a value inside a Discord blockquote. */
+function _quote(text) {
+  return text.split('\n').map(l => `> ${l}`).join('\n');
+}
+
+/** Render a list of {name, value} fields as formatted text blocks. */
+function _fields(fields) {
+  return fields.map(f => _txt(`**${f.name}**\n${_quote(f.value)}`));
+}
+
 // ── Public Builders ───────────────────────────────────────────────────────────
 
 /**
- * Red alert message (threat detected).
+ * 🚨 Red alert — threat detected / quarantine triggered.
  */
 function alertMessage(title, description, fields = []) {
   const parts = [
-    _txt(`${e('uyari')} **${title}**`),
+    _txt(`### 🚨 ${title}\n-# <t:${_ts()}:f>`),
     _sep(),
   ];
   if (description) parts.push(_txt(description));
-  for (const f of fields) {
+  if (fields.length) {
     parts.push(_sep(false));
-    parts.push(_txt(`**${f.name}**\n${f.value}`));
+    parts.push(..._fields(fields));
   }
-  return {
-    flags: _flags(),
-    components: [_container(0xFF0000, ...parts)],
-  };
+  return { flags: _flags(), components: [_container(0xED4245, ...parts)] };
 }
 
 /**
- * Green success message.
+ * ✅ Green success.
  */
 function successMessage(title, description, fields = []) {
   const parts = [
-    _txt(`${e('tik', 'static')} **${title}**`),
+    _txt(`### ✅ ${title}`),
   ];
   if (description) {
     parts.push(_sep());
     parts.push(_txt(description));
   }
-  for (const f of fields) {
+  if (fields.length) {
     parts.push(_sep(false));
-    parts.push(_txt(`**${f.name}**\n${f.value}`));
+    parts.push(..._fields(fields));
   }
-  return {
-    flags: _flags(),
-    components: [_container(0x57F287, ...parts)],
-  };
+  return { flags: _flags(), components: [_container(0x57F287, ...parts)] };
 }
 
 /**
- * Red error message.
+ * ❌ Red error.
  */
 function errorMessage(title, description) {
-  const parts = [_txt(`${e('red', 'static')} **${title}**`)];
+  const parts = [_txt(`### ❌ ${title}`)];
   if (description) {
     parts.push(_sep());
     parts.push(_txt(description));
   }
-  return {
-    flags: _flags(),
-    components: [_container(0xED4245, ...parts)],
-  };
+  return { flags: _flags(), components: [_container(0xED4245, ...parts)] };
 }
 
 /**
- * Blue info message.
+ * 📋 Blue info / dashboard.
  */
 function infoMessage(title, description, fields = []) {
   const parts = [
-    _txt(`${e('bilgi')} **${title}**`),
+    _txt(`### 📋 ${title}\n-# <t:${_ts()}:f>`),
   ];
   if (description) {
     parts.push(_sep());
     parts.push(_txt(description));
   }
-  for (const f of fields) {
+  if (fields.length) {
     parts.push(_sep(false));
-    parts.push(_txt(`**${f.name}**\n${f.value}`));
+    parts.push(..._fields(fields));
   }
-  return {
-    flags: _flags(),
-    components: [_container(0x5865F2, ...parts)],
-  };
+  return { flags: _flags(), components: [_container(0x5865F2, ...parts)] };
 }
 
 /**
- * Orange warning message.
+ * ⚠️ Yellow warning.
  */
 function warnMessage(title, description, fields = []) {
   const parts = [
-    _txt(`${e('unlem')} **${title}**`),
+    _txt(`### ⚠️ ${title}\n-# <t:${_ts()}:f>`),
   ];
   if (description) {
     parts.push(_sep());
     parts.push(_txt(description));
   }
-  for (const f of fields) {
+  if (fields.length) {
     parts.push(_sep(false));
-    parts.push(_txt(`**${f.name}**\n${f.value}`));
+    parts.push(..._fields(fields));
   }
-  return {
-    flags: _flags(),
-    components: [_container(0xFEE75C, ...parts)],
-  };
+  return { flags: _flags(), components: [_container(0xFEE75C, ...parts)] };
 }
 
 /**
- * Confirmation message with Onayla / İptal buttons.
+ * 🔐 Orange confirmation with Onayla / İptal buttons.
  */
 function confirmationMessage(title, description, confirmId, cancelId) {
   const row = new ActionRowBuilder().addComponents(
@@ -156,25 +149,23 @@ function confirmationMessage(title, description, confirmId, cancelId) {
       .setLabel('❌ İptal')
       .setStyle(ButtonStyle.Secondary),
   );
+
   const parts = [
-    _txt(`${e('uyari')} **${title}**`),
+    _txt(`### 🔐 ${title}`),
     _sep(),
   ];
   if (description) parts.push(_txt(description));
   parts.push(_sep(false));
   parts.push(row);
-  return {
-    flags: _flags(),
-    components: [_container(0xFF8800, ...parts)],
-  };
+
+  return { flags: _flags(), components: [_container(0xFF8800, ...parts)] };
 }
 
 /**
- * Paginated help page container.
+ * 📖 Paginated help page.
  */
 function helpPage(pageTitle, pageBody, currentPage, totalPages, prevId, nextId) {
-  const navRow = new ActionRowBuilder();
-  navRow.addComponents(
+  const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(prevId)
       .setLabel('◀ Geri')
@@ -191,12 +182,13 @@ function helpPage(pageTitle, pageBody, currentPage, totalPages, prevId, nextId) 
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(currentPage === totalPages - 1),
   );
+
   return {
     flags: _flags(),
     components: [
       _container(
         0x5865F2,
-        _txt(`${e('bilgi')} **${pageTitle}**`),
+        _txt(`### 🛡️ ${pageTitle}\n-# Sayfa ${currentPage + 1} / ${totalPages}`),
         _sep(),
         _txt(pageBody),
         _sep(false),
