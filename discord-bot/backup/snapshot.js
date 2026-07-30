@@ -13,7 +13,7 @@ async function takeSnapshot(guild) {
     for (const [, channel] of guild.channels.cache) {
       try {
         const overwrites = [];
-        for (const [id, overwrite] of channel.permissionOverwrites.cache) {
+        for (const [id, overwrite] of (channel.permissionOverwrites?.cache ?? [])) {
           overwrites.push({
             id,
             type: overwrite.type,
