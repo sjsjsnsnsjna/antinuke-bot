@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const { runPermissionAudit } = require('../jobs/permissionAudit');
 
 module.exports = {
-  name: 'ready',
+  name: 'clientReady',
   once: true,
   async execute(client) {
     try {

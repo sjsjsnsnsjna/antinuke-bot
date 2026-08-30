@@ -142,6 +142,7 @@ async function releaseUser(guild, member) {
  */
 async function fetchAuditLogEntry(guild, auditLogEvent, targetId) {
   const { maxRetries, retryDelayMs } = config.auditLog;
+  const NON_RETRYABLE = new Set([10004, 10003, 50001, 50013]);
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       await new Promise(r => setTimeout(r, attempt === 0 ? 800 : retryDelayMs));
@@ -154,6 +155,7 @@ async function fetchAuditLogEntry(guild, auditLogEvent, targetId) {
       });
       if (entry) return entry;
     } catch (err) {
+      if (NON_RETRYABLE.has(err?.code)) return null;
       logger.error(`[fetchAuditLogEntry] attempt ${attempt + 1} failed:`, err);
     }
   }
