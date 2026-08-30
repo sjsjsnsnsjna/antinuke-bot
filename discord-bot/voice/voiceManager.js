@@ -81,10 +81,10 @@ async function join(client) {
     });
 
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
       logger.info(`[Ses] 🔊 ${channel.name} kanalında beklemede.`);
     } catch {
-      logger.warn(`[Ses] ${channel.name} kanalına 15sn içinde bağlanılamadı, tekrar denenecek.`);
+      logger.info(`[Ses] ${channel.name} kanalı için hazır olma süresi aşıldı (Railway ses bağlantısı yavaş); bağlantı arka planda devam ediyor, gerekirse tekrar denenecek.`);
     }
   } catch (err) {
     logger.error('[Ses] Bağlantı hatası:', err);
@@ -105,7 +105,7 @@ function startVoice(client) {
     if (joining) return;
     const state = currentConnection?.state.status;
     if (state === VoiceConnectionStatus.Ready) return;
-    if (Date.now() - lastAttemptAt < 30_000) return;
+    if (Date.now() - lastAttemptAt < 45_000) return;
     join(client).catch(err => logger.error('[Ses] Watchdog hatası:', err));
   }, 30_000);
   watchdog.unref();
