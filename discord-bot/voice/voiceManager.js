@@ -6,60 +6,90 @@ const {
   VoiceConnectionStatus,
   VoiceConnectionDisconnectReason,
 } = require('@discordjs/voice');
+const { PermissionsBitField } = require('discord.js');
 const logger = require('../utils/logger');
 
 const VC_ID = process.env.VOICE_CHANNEL_ID || null;
 
 let currentConnection = null;
+let joining = false;
+let lastAttemptAt = 0;
+let lastAutoRejoinAt = 0;
 let watchdog = null;
 
 async function join(client) {
-  if (!VC_ID) return;
-  const guild = client.guilds.cache.find(g => g.channels.cache.has(VC_ID));
-  if (!guild) {
-    logger.warn(`[Ses] ${VC_ID} kanalı hiçbir sunucuda bulunamadı.`);
-    return;
-  }
-  const channel = guild.channels.cache.get(VC_ID);
-  if (!channel || !channel.isVoiceBased()) {
-    logger.warn(`[Ses] ${VC_ID} geçerli bir ses kanalı değil.`);
-    return;
-  }
-
+  if (!VC_ID || joining) return;
   if (currentConnection && currentConnection.state.status === VoiceConnectionStatus.Ready) return;
 
+  joining = true;
+  lastAttemptAt = Date.now();
   try {
-    currentConnection?.destroy();
-  } catch {}
+    const guild = client.guilds.cache.find(g => g.channels.cache.has(VC_ID));
+    if (!guild) {
+      logger.warn(`[Ses] ${VC_ID} kanalı hiçbir sunucuda bulunamadı.`);
+      return;
+    }
+    const channel = guild.channels.cache.get(VC_ID);
+    if (!channel || !channel.isVoiceBased()) {
+      logger.warn(`[Ses] ${VC_ID} geçerli bir ses kanalı değil.`);
+      return;
+    }
 
-  const connection = joinVoiceChannel({
-    channelId: channel.id,
-    guildId: guild.id,
-    adapterCreator: guild.voiceAdapterCreator,
-    selfDeaf: true,
-    selfMute: false,
-  });
-  currentConnection = connection;
+    const me = guild.members.me;
+    if (me) {
+      const required = [
+        PermissionsBitField.Flags.ViewChannel,
+        PermissionsBitField.Flags.Connect,
+        PermissionsBitField.Flags.Speak,
+      ];
+      const missing = required
+        .filter(flag => !me.permissionsIn(channel).has(flag))
+        .map(flag => Object.keys(PermissionsBitField.Flags).find(k => PermissionsBitField.Flags[k] === flag));
+      if (missing.length) {
+        logger.warn(`[Ses] UYARI: ${channel.name} kanalında eksik izinler: ${missing.join(', ')}. Bot rolüne bu izinleri verip tekrar deneyecek.`);
+      }
+    }
 
-  connection.on('error', err => logger.error(`[Ses] Bağlantı hatası: ${err.message}`));
+    try {
+      currentConnection?.destroy();
+    } catch {}
 
-  connection.on('stateChange', (oldState, newState) => {
-    if (newState.status === VoiceConnectionStatus.Disconnected) {
+    const connection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: guild.id,
+      adapterCreator: guild.voiceAdapterCreator,
+      selfDeaf: true,
+      selfMute: false,
+    });
+    currentConnection = connection;
+
+    connection.on('error', err => logger.error(`[Ses] Bağlantı hatası: ${err.message}`));
+
+    connection.on('stateChange', (oldState, newState) => {
+      if (newState.status !== VoiceConnectionStatus.Disconnected) return;
       if (newState.reason === VoiceConnectionDisconnectReason.Manual) return;
+      if (Date.now() - lastAutoRejoinAt < 20_000) return;
+      lastAutoRejoinAt = Date.now();
       logger.warn('[Ses] Bağlantı koptu, yeniden bağlanılıyor...');
       setTimeout(() => {
         if (connection.state.status === VoiceConnectionStatus.Disconnected) {
-          try { connection.rejoin(); } catch {}
+          try {
+            connection.rejoin();
+          } catch {}
         }
       }, 5_000);
-    }
-  });
+    });
 
-  try {
-    await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-    logger.info(`[Ses] 🔊 ${channel.name} kanalında beklemede.`);
-  } catch {
-    logger.warn('[Ses] Bağlantı 15sn içinde hazır olamadı, watchdog tekrar deneyecek.');
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+      logger.info(`[Ses] 🔊 ${channel.name} kanalında beklemede.`);
+    } catch {
+      logger.warn(`[Ses] ${channel.name} kanalına 15sn içinde bağlanılamadı, tekrar denenecek.`);
+    }
+  } catch (err) {
+    logger.error('[Ses] Bağlantı hatası:', err);
+  } finally {
+    joining = false;
   }
 }
 
@@ -72,10 +102,11 @@ function startVoice(client) {
 
   if (watchdog) return;
   watchdog = setInterval(() => {
+    if (joining) return;
     const state = currentConnection?.state.status;
-    if (!currentConnection || state === VoiceConnectionStatus.Disconnected || state === VoiceConnectionStatus.Destroyed) {
-      join(client).catch(err => logger.error('[Ses] Watchdog hatası:', err));
-    }
+    if (state === VoiceConnectionStatus.Ready) return;
+    if (Date.now() - lastAttemptAt < 30_000) return;
+    join(client).catch(err => logger.error('[Ses] Watchdog hatası:', err));
   }, 30_000);
   watchdog.unref();
 }
