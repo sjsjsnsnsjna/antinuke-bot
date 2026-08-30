@@ -25,6 +25,18 @@ module.exports = {
         } catch {}
       }
 
+      // Auto-whitelist OWNER_IDS'deki sistem sahipleri (virgülle ayrılmış)
+      const ownerIds = (process.env.OWNER_IDS || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(id => /^\d{17,20}$/.test(id));
+      for (const id of ownerIds) {
+        db.addWhitelist('user', id, 'system');
+      }
+      if (ownerIds.length) {
+        logger.info(`[Ready] Sistem sahipleri whitelist'e eklendi: ${ownerIds.join(', ')}`);
+      }
+
       // Restore log channel from env if not already set
       if (!db.getConfig('log_channel_id') && process.env.LOG_CHANNEL_ID) {
         db.setConfig('log_channel_id', process.env.LOG_CHANNEL_ID);
