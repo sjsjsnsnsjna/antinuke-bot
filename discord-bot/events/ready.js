@@ -4,6 +4,7 @@ const { ActivityType } = require('discord.js');
 const db     = require('../database/db');
 const logger = require('../utils/logger');
 const { runPermissionAudit } = require('../jobs/permissionAudit');
+const { startVoice } = require('../voice/voiceManager');
 
 module.exports = {
   name: 'clientReady',
@@ -13,6 +14,8 @@ module.exports = {
       logger.info(`[Ready] ${client.user.tag} çevrimiçi! ${client.guilds.cache.size} sunucu.`);
 
       client.user.setActivity('🛡️ Sunucuyu Koruyorum', { type: ActivityType.Watching });
+
+      startVoice(client);
 
       // Auto-whitelist bot owner (server owner per guild) and the bot itself
       for (const [, guild] of client.guilds.cache) {
