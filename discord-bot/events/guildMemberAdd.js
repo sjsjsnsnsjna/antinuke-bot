@@ -1,9 +1,9 @@
 'use strict';
 
 const { AuditLogEvent } = require('discord.js');
-const { checkRaidJoin, isBotAction, shouldSkip: _skip } = require('../detection/actionTracker');
+const { checkRaidJoin } = require('../detection/actionTracker');
 const { sendLogAlert, dmWhitelistedAdmins, fetchAuditLogEntry, shouldSkip } = require('../utils/quarantine');
-const { alertMessage, warnMessage } = require('../utils/components');
+const { alertMessage } = require('../utils/components');
 const config = require('../config/config');
 const db = require('../database/db');
 const logger = require('../utils/logger');
@@ -33,7 +33,7 @@ module.exports = {
 
       // ── Raid detection ────────────────────────────────────────────────────────
       const raidActive = db.getConfig('raid_mode') === '1';
-      const { triggered, count } = checkRaidJoin();
+      const { triggered, count } = checkRaidJoin(guild.id);
 
       if (triggered && !raidActive) {
         // Auto-activate raid mode

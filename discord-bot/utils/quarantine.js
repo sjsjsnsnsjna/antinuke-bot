@@ -2,7 +2,7 @@
 
 const db = require('../database/db');
 const { alertMessage, successMessage } = require('./components');
-const { markBotAction } = require('../detection/actionTracker');
+const { markBotAction, clearUser } = require('../detection/actionTracker');
 const config = require('../config/config');
 const logger = require('./logger');
 
@@ -90,8 +90,10 @@ async function quarantineUser(guild, member, reason, client) {
 
     const botMember = await guild.members.fetchMe();
 
-    // Can't act on higher-role members
-    if (member.roles.highest.position >= botMember.roles.highest.position) {
+    // Can't act on higher-role members (but @everyone isn't a role that can outrank the bot)
+    const memberHighest = member.roles.highest;
+    const memberOnlyEveryone = !memberHighest || memberHighest.id === guild.id;
+    if (!memberOnlyEveryone && memberHighest.position >= botMember.roles.highest.position) {
       return { success: false, reason: 'HIGHER_ROLE' };
     }
 
@@ -105,6 +107,7 @@ async function quarantineUser(guild, member, reason, client) {
     await member.roles.add(qRole, `AntiNuke: ${reason}`);
 
     db.logPunishment(member.id, member.user?.tag ?? member.id, 'quarantine', reason);
+    clearUser(member.id);
 
     // Auto-ban if configured
     if (config.autoBanOnThreat) {

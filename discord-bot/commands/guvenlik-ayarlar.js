@@ -22,13 +22,17 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('guvenlik-ayarlar')
     .setDescription('Mevcut güvenlik eşiklerini ve ayarlarını gösterir veya günceller.'),
-  aliases: ['guvenlik-ayarlar'],
+  aliases: ['guvenlik-ayarlar', 'guvenlik-ayarla'],
 
   async execute(source, args, isSlash) {
     try {
       if (!source.guild) return;
       const denied = requireAdmin(source.member);
       if (denied) return reply(source, isSlash, denied);
+
+      if (!isSlash && args.length > 0) {
+        return this.handleAdjust(source, args, isSlash);
+      }
 
       const display = buildThresholdDisplay();
       const autoBan = db.getConfig('auto_ban') === '1' ? 'Aktif' : 'Kapalı';
@@ -55,9 +59,14 @@ module.exports = {
       const [key, count, window] = args;
       if (!key || !count) return reply(source, isSlash, errorMessage('Kullanım', '`B!guvenlik-ayarla <aksiyon> <sayı> [saniye]`'));
       if (!config.thresholds[key]) return reply(source, isSlash, errorMessage('Hata', `Geçersiz aksiyon: ${key}`));
-      db.setConfig(`threshold_${key}_count`, parseInt(count, 10));
-      if (window) db.setConfig(`threshold_${key}_window`, parseInt(window, 10));
-      return reply(source, isSlash, successMessage('Eşik Güncellendi', `**${key}**: ${count} aksiyon / ${window ?? '?'}s olarak ayarlandı.`));
+      const countNum = parseInt(count, 10);
+      const winNum   = window ? parseInt(window, 10) : null;
+      if (isNaN(countNum) || (winNum !== null && isNaN(winNum))) {
+        return reply(source, isSlash, errorMessage('Hata', 'Sayı değerleri geçersiz.'));
+      }
+      db.setConfig(`threshold_${key}_count`, countNum);
+      if (winNum !== null) db.setConfig(`threshold_${key}_window`, winNum);
+      return reply(source, isSlash, successMessage('Eşik Güncellendi', `**${key}**: ${countNum} aksiyon / ${winNum ?? 'mevcut'}s olarak ayarlandı.`));
     } catch (err) {
       return reply(source, isSlash, errorMessage('Hata', err.message));
     }

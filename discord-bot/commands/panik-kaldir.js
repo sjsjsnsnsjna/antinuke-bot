@@ -57,13 +57,15 @@ module.exports = {
             const existing = channel.permissionOverwrites.cache.get(guild.id);
             if (existing) await existing.delete('AntiNuke: Panik modu kaldırıldı');
           } else {
-            // Restore previous allow/deny values
-            await channel.permissionOverwrites.edit(guild.roles.everyone, {
-              SendMessages: state.previous_deny.includes('SendMessages') ? false
-                          : state.previous_allow.includes('SendMessages') ? true : null,
-              CreateInstantInvite: state.previous_deny.includes('CreateInstantInvite') ? false
-                                 : state.previous_allow.includes('CreateInstantInvite') ? true : null,
-            }, { reason: 'AntiNuke: Panik modu kaldırıldı' });
+            const allowBits = BigInt(state.previous_allow || '0');
+            const denyBits  = BigInt(state.previous_deny || '0');
+            const opts = {};
+            for (const key of Object.keys(PermissionsBitField.Flags)) {
+              const bit = PermissionsBitField.Flags[key];
+              opts[key] = (denyBits & bit) === bit ? false
+                        : (allowBits & bit) === bit ? true : null;
+            }
+            await channel.permissionOverwrites.edit(guild.roles.everyone, opts, { reason: 'AntiNuke: Panik modu kaldırıldı' });
           }
           restored++;
         } catch {}
@@ -79,6 +81,7 @@ module.exports = {
       ));
 
       if (isSlash) source.editReply(successMessage('Panik Modu Kaldırıldı', `${restored} kanal normale döndürüldü.`)).catch(() => {});
+      else source.reply(successMessage('Panik Modu Kaldırıldı', `${restored} kanal normale döndürüldü.`)).catch(() => {});
     } catch (err) {
       console.error('[panik-kaldir]', err);
       return reply(source, isSlash, errorMessage('Hata', err.message));

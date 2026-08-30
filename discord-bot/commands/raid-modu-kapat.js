@@ -24,7 +24,7 @@ module.exports = {
       }
 
       db.setConfig('raid_mode', '0');
-      resetRaidJoins();
+      resetRaidJoins(source.guild.id);
       try {
         await source.guild.setVerificationLevel(1, 'AntiNuke: Baskın modu devre dışı');
       } catch {}

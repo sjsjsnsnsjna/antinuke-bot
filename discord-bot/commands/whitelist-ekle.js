@@ -43,8 +43,12 @@ module.exports = {
         }
       }
 
+      if (db.isWhitelisted(targetId)) {
+        return reply(source, isSlash, errorMessage('Hata', 'Bu kişi/rol zaten whitelist\'te.'));
+      }
+
       const ok = db.addWhitelist(type, targetId, source.member?.id ?? 'unknown');
-      if (!ok) return reply(source, isSlash, errorMessage('Hata', 'Zaten whitelist\'te kayıtlı.'));
+      if (!ok) return reply(source, isSlash, errorMessage('Hata', 'Veritabanı hatası: eklenemedi.'));
 
       return reply(source, isSlash, successMessage(
         'Whitelist\'e Eklendi',

@@ -32,7 +32,8 @@ async function reply(source, isSlash, payload) {
       }
       return source.reply({ ...payload, ephemeral: true });
     } else {
-      return source.reply(payload);
+      const { ephemeral, ...rest } = payload;
+      return source.reply(rest);
     }
   } catch {}
 }

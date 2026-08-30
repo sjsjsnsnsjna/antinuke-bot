@@ -92,6 +92,7 @@ module.exports = {
       ));
 
       if (isSlash) source.editReply(successMessage('Panik Modu Aktif', `${locked} kanal kilitlendi, ${revokedInvites} davet iptal edildi.`)).catch(() => {});
+      else source.reply(successMessage('Panik Modu Aktif', `${locked} kanal kilitlendi, ${revokedInvites} davet iptal edildi.`)).catch(() => {});
     } catch (err) {
       console.error('[panik]', err);
       return reply(source, isSlash, errorMessage('Hata', err.message));

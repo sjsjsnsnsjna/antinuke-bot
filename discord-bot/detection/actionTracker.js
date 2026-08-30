@@ -10,8 +10,8 @@ const counters = new Map();
 const botActions = new Map(); // key -> expiresAt
 const BOT_ACTION_TTL = 30_000;
 
-// Raid join tracking
-const raidJoins = [];
+// Raid join tracking per guild: Map<guildId, number[]>
+const raidJoins = new Map();
 
 /**
  * Record an action for a user and check if the threshold is exceeded.
@@ -71,29 +71,35 @@ function isBotAction(type, identifier) {
  * Track a member join for raid detection.
  * Returns { triggered: boolean, count: number }
  */
-function checkRaidJoin() {
+function checkRaidJoin(guildId) {
   const now = Date.now();
-  raidJoins.push(now);
+  const arr = raidJoins.get(guildId) || [];
+  arr.push(now);
   const cfg = config.raid;
   const cutoff = now - cfg.joinWindow;
-  const fresh = raidJoins.filter(t => t >= cutoff);
-  // Replace in place
-  raidJoins.splice(0, raidJoins.length, ...fresh);
+  const fresh = arr.filter(t => t >= cutoff);
+  raidJoins.set(guildId, fresh);
   return { triggered: fresh.length >= cfg.joinCount, count: fresh.length };
 }
 
 /**
- * Reset raid join counter (e.g. after raid mode is manually deactivated).
+ * Reset raid join counter for a guild (e.g. after raid mode is manually deactivated).
  */
-function resetRaidJoins() {
-  raidJoins.splice(0, raidJoins.length);
+function resetRaidJoins(guildId) {
+  if (guildId) raidJoins.delete(guildId);
+  else raidJoins.clear();
 }
 
-// Periodic cleanup of expired bot actions (every 60 seconds)
+// Periodic cleanup of expired bot actions and stale raid counters (every 60 seconds)
 setInterval(() => {
   const now = Date.now();
   for (const [key, expiry] of botActions.entries()) {
     if (now > expiry) botActions.delete(key);
+  }
+  for (const [guildId, arr] of raidJoins.entries()) {
+    const fresh = arr.filter(t => now - t <= config.raid.joinWindow);
+    if (fresh.length === 0) raidJoins.delete(guildId);
+    else raidJoins.set(guildId, fresh);
   }
 }, 60_000).unref();
 
