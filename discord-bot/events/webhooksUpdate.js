@@ -31,10 +31,15 @@ module.exports = {
         let member;
         try { member = await guild.members.fetch(actor.id); } catch {}
         if (member) {
-          const result = await quarantineUser(guild, member, `${count} webhook oluşturma`, client);
-          actionText = result.success
-            ? `${actor.tag} karantinaya alındı.`
-            : `Karantina uygulanamadı: ${result.reason}`;
+          try {
+            await member.kick(`${count} webhook oluşturma`);
+            actionText = `${actor.tag} atıldı (kick).`;
+          } catch {
+            const result = await quarantineUser(guild, member, `${count} webhook oluşturma`, client);
+            actionText = result.success
+              ? `${actor.tag} karantinaya alındı (kick başarısız).`
+              : `Kick ve karantina başarısız: ${result.reason}`;
+          }
         }
       }
 

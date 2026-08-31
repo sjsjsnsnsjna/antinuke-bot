@@ -2,7 +2,7 @@
 
 const { AuditLogEvent } = require('discord.js');
 const { checkAndRecord, isBotAction } = require('../detection/actionTracker');
-const { quarantineUser, sendLogAlert, dmWhitelistedAdmins, fetchAuditLogEntry, shouldSkip } = require('../utils/quarantine');
+const { quarantineUser, sendLogAlert, fetchAuditLogEntry, shouldSkip } = require('../utils/quarantine');
 const { alertMessage } = require('../utils/components');
 const { getLatestSnapshot } = require('../database/db');
 const { restoreRoles } = require('../backup/restore');
@@ -32,10 +32,15 @@ module.exports = {
 
       let actionText = 'Üye bulunamadı.';
       if (member) {
-        const result = await quarantineUser(guild, member, `${count} rol silme (saldırı)`, client);
-        actionText = result.success
-          ? `${actor.tag} karantinaya alındı.`
-          : `Karantina uygulanamadı: ${result.reason}`;
+        try {
+          await member.kick(`${count} rol silme (saldırı)`);
+          actionText = `${actor.tag} atıldı (kick).`;
+        } catch {
+          const result = await quarantineUser(guild, member, `${count} rol silme (saldırı)`, client);
+          actionText = result.success
+            ? `${actor.tag} karantinaya alındı (kick başarısız).`
+            : `Kick ve karantina başarısız: ${result.reason}`;
+        }
       }
 
       let restoreText = 'Yedek bulunamadı.';
@@ -59,7 +64,10 @@ module.exports = {
       );
 
       await sendLogAlert(client, payload);
-      await dmWhitelistedAdmins(client, alertMessage('🚨 Acil', `${actor.tag} mass rol sildi! ${guild.name}`));
+      try {
+        const ownerMember = await guild.members.fetch(guild.ownerId);
+        await ownerMember.send(alertMessage('🚨 Acil', `${actor.tag} mass rol sildi! ${guild.name}`));
+      } catch {}
     } catch (err) {
       logger.error('[roleDelete event]', err);
     }

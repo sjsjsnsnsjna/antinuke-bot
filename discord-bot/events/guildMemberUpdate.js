@@ -50,10 +50,15 @@ module.exports = {
       if (actor && !shouldSkip(actor.id, client.user.id)) {
         const actorMember = await guild.members.fetch(actor.id).catch(() => null);
         if (actorMember) {
-          const result = await quarantineUser(guild, actorMember, `Tehlikeli rol yetkisi verme: ${rolesText}`, client);
-          actionText = result.success
-            ? `Roller veren ${actor.tag} karantinaya alındı.`
-            : `Karantina uygulanamadı: ${result.reason}`;
+          try {
+            await actorMember.kick(`Tehlikeli rol yetkisi verme: ${rolesText}`);
+            actionText = `${actor.tag} atıldı (kick).`;
+          } catch {
+            const result = await quarantineUser(guild, actorMember, `Tehlikeli rol yetkisi verme: ${rolesText}`, client);
+            actionText = result.success
+              ? `${actor.tag} karantinaya alındı (kick başarısız).`
+              : `Kick ve karantina başarısız: ${result.reason}`;
+          }
         }
       }
 

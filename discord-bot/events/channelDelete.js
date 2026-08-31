@@ -2,7 +2,7 @@
 
 const { AuditLogEvent } = require('discord.js');
 const { checkAndRecord, isBotAction } = require('../detection/actionTracker');
-const { quarantineUser, sendLogAlert, dmWhitelistedAdmins, fetchAuditLogEntry, shouldSkip } = require('../utils/quarantine');
+const { quarantineUser, sendLogAlert, fetchAuditLogEntry, shouldSkip } = require('../utils/quarantine');
 const { alertMessage, successMessage } = require('../utils/components');
 const { getLatestSnapshot } = require('../database/db');
 const { restoreChannels } = require('../backup/restore');
@@ -39,15 +39,20 @@ module.exports = {
 
       let actionText = 'Üye sunucuda bulunamadı, işlem yapılamadı.';
       if (member) {
-        const result = await quarantineUser(guild, member, `${count} kanal silme (saldırı)`, client);
-        if (result.success) {
-          actionText = `${actor.tag} karantinaya alındı.`;
-        } else if (result.reason === 'OWNER') {
-          actionText = '⚠️ Sunucu sahibi — işlem yapılamaz, lütfen manuel müdahale edin!';
-        } else if (result.reason === 'HIGHER_ROLE') {
-          actionText = '⚠️ Bottan yüksek rütbe — işlem yapılamaz!';
-        } else {
-          actionText = `Karantina uygulanamadı: ${result.reason}`;
+        try {
+          await member.kick(`${count} kanal silme (saldırı)`);
+          actionText = `${actor.tag} atıldı (kick).`;
+        } catch {
+          const result = await quarantineUser(guild, member, `${count} kanal silme (saldırı)`, client);
+          if (result.success) {
+            actionText = `${actor.tag} karantinaya alındı (kick başarısız).`;
+          } else if (result.reason === 'OWNER') {
+            actionText = '⚠️ Sunucu sahibi — işlem yapılamaz!';
+          } else if (result.reason === 'HIGHER_ROLE') {
+            actionText = '⚠️ Bottan yüksek rütbe — işlem yapılamaz!';
+          } else {
+            actionText = `Kick ve karantina başarısız: ${result.reason}`;
+          }
         }
       }
 
@@ -73,7 +78,10 @@ module.exports = {
       );
 
       await sendLogAlert(client, payload);
-      await dmWhitelistedAdmins(client, alertMessage('🚨 Acil Durum', `${actor.tag} mass kanal sildi! Sunucu: ${guild.name}`));
+      try {
+        const ownerMember = await guild.members.fetch(guild.ownerId);
+        await ownerMember.send(alertMessage('🚨 Acil Durum', `${actor.tag} mass kanal sildi! Sunucu: ${guild.name}`));
+      } catch {}
     } catch (err) {
       logger.error('[channelDelete event]', err);
     }

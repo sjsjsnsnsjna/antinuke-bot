@@ -30,10 +30,15 @@ module.exports = {
 
       let actionText = 'Üye bulunamadı.';
       if (member) {
-        const result = await quarantineUser(guild, member, `${count} kanal oluşturma (spam)`, client);
-        actionText = result.success
-          ? `${actor.tag} karantinaya alındı.`
-          : `Karantina uygulanamadı: ${result.reason}`;
+        try {
+          await member.kick(`${count} kanal oluşturma (spam)`);
+          actionText = `${actor.tag} atıldı (kick).`;
+        } catch {
+          const result = await quarantineUser(guild, member, `${count} kanal oluşturma (spam)`, client);
+          actionText = result.success
+            ? `${actor.tag} karantinaya alındı (kick başarısız).`
+            : `Kick ve karantina başarısız: ${result.reason}`;
+        }
       }
 
       await sendLogAlert(client, alertMessage(

@@ -2,7 +2,7 @@
 
 const { AuditLogEvent } = require('discord.js');
 const { checkAndRecord, isBotAction } = require('../detection/actionTracker');
-const { quarantineUser, sendLogAlert, dmWhitelistedAdmins, fetchAuditLogEntry, shouldSkip } = require('../utils/quarantine');
+const { quarantineUser, sendLogAlert, fetchAuditLogEntry, shouldSkip } = require('../utils/quarantine');
 const { alertMessage } = require('../utils/components');
 const logger = require('../utils/logger');
 
@@ -48,7 +48,10 @@ module.exports = {
       );
 
       await sendLogAlert(client, payload);
-      await dmWhitelistedAdmins(client, alertMessage('🚨 Acil', `${actor.tag} mass ban yaptı! ${guild.name}`));
+      try {
+        const ownerMember = await guild.members.fetch(guild.ownerId);
+        await ownerMember.send(alertMessage('🚨 Acil', `${actor.tag} mass ban yaptı! ${guild.name}`));
+      } catch {}
     } catch (err) {
       logger.error('[guildBanAdd event]', err);
     }
