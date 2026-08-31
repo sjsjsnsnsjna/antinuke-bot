@@ -64,7 +64,11 @@ module.exports = {
       );
 
       await sendLogAlert(client, payload);
-      await dmWhitelistedAdmins(client, alertMessage('🚨 Acil', `${newMember.user.tag} tehlikeli rol aldı! ${guild.name}`));
+
+      // Owner kendi başına yaptıysa DM uyarı gönderme
+      if (actor && actor.id !== guild.ownerId) {
+        await dmWhitelistedAdmins(client, alertMessage('🚨 Acil', `${newMember.user.tag} tehlikeli rol aldı! ${guild.name}`));
+      }
     } catch (err) {
       logger.error('[guildMemberUpdate event]', err);
     }
