@@ -10,6 +10,7 @@ const {
   MessageFlags,
   SeparatorSpacingSize,
 } = require('discord.js');
+const e = require('./emojiMap');
 
 // ── Internals ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,11 @@ function _ts() {
   return Math.floor(Date.now() / 1000);
 }
 
+/** Remove a leading unicode icon (if any) so custom emojis don't duplicate. */
+function _cleanTitle(title) {
+  return String(title).replace(/^\s*(🚨|⚠️|✅|❌|📋|📖|🔐|🛡️|💾)\s*/, '').trim();
+}
+
 /** Wrap each line of a value inside a Discord blockquote. */
 function _quote(text) {
   return text.split('\n').map(l => `> ${l}`).join('\n');
@@ -58,7 +64,7 @@ function _fields(fields) {
  */
 function alertMessage(title, description, fields = []) {
   const parts = [
-    _txt(`### 🚨 ${title}\n-# <t:${_ts()}:f>`),
+    _txt(`### ${e.ALERT} ${_cleanTitle(title)}\n-# <t:${_ts()}:f>`),
     _sep(),
   ];
   if (description) parts.push(_txt(description));
@@ -74,7 +80,7 @@ function alertMessage(title, description, fields = []) {
  */
 function successMessage(title, description, fields = []) {
   const parts = [
-    _txt(`### ✅ ${title}`),
+    _txt(`### ${e.SUCCESS} ${_cleanTitle(title)}`),
   ];
   if (description) {
     parts.push(_sep());
@@ -91,7 +97,7 @@ function successMessage(title, description, fields = []) {
  * ❌ Red error.
  */
 function errorMessage(title, description) {
-  const parts = [_txt(`### ❌ ${title}`)];
+  const parts = [_txt(`### ${e.ERROR} ${_cleanTitle(title)}`)];
   if (description) {
     parts.push(_sep());
     parts.push(_txt(description));
@@ -122,7 +128,7 @@ function infoMessage(title, description, fields = []) {
  */
 function warnMessage(title, description, fields = []) {
   const parts = [
-    _txt(`### ⚠️ ${title}\n-# <t:${_ts()}:f>`),
+    _txt(`### ${e.WARN} ${_cleanTitle(title)}\n-# <t:${_ts()}:f>`),
   ];
   if (description) {
     parts.push(_sep());
@@ -188,7 +194,7 @@ function helpPage(pageTitle, pageBody, currentPage, totalPages, prevId, nextId) 
     components: [
       _container(
         0x5865F2,
-        _txt(`### 🛡️ ${pageTitle}\n-# Sayfa ${currentPage + 1} / ${totalPages}`),
+        _txt(`### ${e.SHIELD} ${pageTitle}\n-# Sayfa ${currentPage + 1} / ${totalPages}`),
         _sep(),
         _txt(pageBody),
         _sep(false),
